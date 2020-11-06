@@ -157,7 +157,7 @@ ControlTabWidget::ControlTabWidget(QWidget* parent)
   save_joint_state_btn_ = new QPushButton("Save joint states");
   connect(save_joint_state_btn_, SIGNAL(clicked(bool)), this, SLOT(saveJointStateBtnClicked(bool)));
   setting_layout->addRow(save_joint_state_btn_);
-  
+
   save_samples_btn_ = new QPushButton("Save samples");
   connect(save_samples_btn_, SIGNAL(clicked(bool)), this, SLOT(saveSamplesBtnClicked(bool)));
   setting_layout->addRow(save_samples_btn_);
@@ -176,6 +176,11 @@ ControlTabWidget::ControlTabWidget(QWidget* parent)
   take_sample_btn_->setMinimumHeight(35);
   connect(take_sample_btn_, SIGNAL(clicked(bool)), this, SLOT(takeSampleBtnClicked(bool)));
   control_cal_layout->addWidget(take_sample_btn_);
+
+  drop_sample_btn_ = new QPushButton("Drop sample");
+  drop_sample_btn_->setMinimumHeight(35);
+  connect(drop_sample_btn_, SIGNAL(clicked(bool)), this, SLOT(dropSampleBtnClicked(bool)));
+  control_cal_layout->addWidget(drop_sample_btn_);
 
   reset_sample_btn_ = new QPushButton("Clear samples");
   reset_sample_btn_->setMinimumHeight(35);
@@ -214,8 +219,7 @@ ControlTabWidget::ControlTabWidget(QWidget* parent)
     fillSolverTypes(plugins);
 
   // Fill in available planning group names
-  planning_scene_monitor_.reset(
-      new planning_scene_monitor::PlanningSceneMonitor("robot_description", tf_buffer_, "planning_scene_monitor"));
+  planning_scene_monitor_.reset(new planning_scene_monitor::PlanningSceneMonitor("robot_description", tf_buffer_, "planning_scene_monitor"));
   if (planning_scene_monitor_)
   {
     planning_scene_monitor_->startSceneMonitor("move_group/monitored_planning_scene");
@@ -230,8 +234,7 @@ ControlTabWidget::ControlTabWidget(QWidget* parent)
         {
           moveit::planning_interface::MoveGroupInterface::Options opt(group_name_->currentText().toStdString());
           opt.node_handle_ = nh_;
-          move_group_.reset(
-              new moveit::planning_interface::MoveGroupInterface(opt, tf_buffer_, ros::WallDuration(30, 0)));
+          move_group_.reset(new moveit::planning_interface::MoveGroupInterface(opt, tf_buffer_, ros::WallDuration(30, 0)));
         }
         catch (std::exception& ex)
         {
@@ -290,8 +293,7 @@ bool ControlTabWidget::loadSolverPlugin(std::vector<std::string>& plugins)
   {
     try
     {
-      solver_plugins_loader_.reset(new pluginlib::ClassLoader<moveit_handeye_calibration::HandEyeSolverBase>(
-          "moveit_calibration_plugins", "moveit_handeye_calibration::HandEyeSolverBase"));
+      solver_plugins_loader_.reset(new pluginlib::ClassLoader<moveit_handeye_calibration::HandEyeSolverBase>("moveit_calibration_plugins", "moveit_handeye_calibration::HandEyeSolverBase"));
     }
     catch (pluginlib::PluginlibException& ex)
     {
@@ -380,8 +382,7 @@ bool ControlTabWidget::solveCameraRobotPose()
 {
   if (solver_ && !calibration_solver_->currentText().isEmpty())
   {
-    bool res = solver_->solve(effector_wrt_world_, object_wrt_sensor_, sensor_mount_type_,
-                              parseSolverName(calibration_solver_->currentText().toStdString(), '/'));
+    bool res = solver_->solve(effector_wrt_world_, object_wrt_sensor_, sensor_mount_type_, parseSolverName(calibration_solver_->currentText().toStdString(), '/'));
     if (res)
     {
       camera_robot_pose_ = solver_->getCameraRobotPose();
@@ -421,8 +422,7 @@ bool ControlTabWidget::solveCameraRobotPose()
 bool ControlTabWidget::frameNamesEmpty()
 {
   // All of four frame names needed for getting the pair of two tf transforms
-  if (frame_names_["sensor"].empty() || frame_names_["object"].empty() || frame_names_["base"].empty() ||
-      frame_names_["eef"].empty())
+  if (frame_names_["sensor"].empty() || frame_names_["object"].empty() || frame_names_["base"].empty() || frame_names_["eef"].empty())
   {
     QMessageBox::warning(this, tr("Empty Frame Name"), tr("At least one of the four frame names is empty."));
     return true;
@@ -447,8 +447,7 @@ void ControlTabWidget::setTFTool(rviz_visual_tools::TFVisualToolsPtr& tf_pub)
   tf_tools_ = tf_pub;
 }
 
-void ControlTabWidget::addPoseSampleToTreeView(const geometry_msgs::TransformStamped& camera_to_object_tf,
-                                               const geometry_msgs::TransformStamped& base_to_eef_tf, int id)
+void ControlTabWidget::addPoseSampleToTreeView(const geometry_msgs::TransformStamped& camera_to_object_tf, const geometry_msgs::TransformStamped& base_to_eef_tf, int id)
 {
   std::string item_name = "Sample " + std::to_string(id);
   QStandardItem* parent = new QStandardItem(QString(item_name.c_str()));
@@ -509,8 +508,7 @@ void ControlTabWidget::takeSampleBtnClicked(bool clicked)
   if (planning_scene_monitor_)
   {
     planning_scene_monitor_->waitForCurrentRobotState(ros::Time::now(), 0.1);
-    const planning_scene_monitor::LockedPlanningSceneRO& ps =
-        planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_);
+    const planning_scene_monitor::LockedPlanningSceneRO& ps = planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_);
     if (ps)
     {
       const robot_state::RobotState& state = ps->getCurrentState();
@@ -533,6 +531,21 @@ void ControlTabWidget::takeSampleBtnClicked(bool clicked)
   }
 }
 
+void ControlTabWidget::dropSampleBtnClicked(bool clicked)
+{
+  ROS_WARN("pressed drop sample button");
+
+  // Clear recorded transforms
+  effector_wrt_world_.clear();
+  object_wrt_sensor_.clear();
+  tree_view_model_->clear();
+
+  // Clear recorded joint states
+  joint_states_.clear();
+  auto_progress_->setMax(joint_states_.size());
+  auto_progress_->setValue(joint_states_.size());
+}
+
 void ControlTabWidget::clearSamplesBtnClicked(bool clicked)
 {
   // Clear recorded transforms
@@ -553,14 +566,11 @@ void ControlTabWidget::saveCameraPoseBtnClicked(bool clicked)
 
   if (from_frame.empty() || to_frame.empty())
   {
-    QMessageBox::warning(this, tr("Empty Frame Name"),
-                         tr("Make sure you have selected the correct frames in the Context tab."));
+    QMessageBox::warning(this, tr("Empty Frame Name"), tr("Make sure you have selected the correct frames in the Context tab."));
     return;
   }
 
-  QString file_name =
-      QFileDialog::getSaveFileName(this, tr("Save Camera Robot Pose"), "", tr("Target File (*.launch);;All Files (*)"),
-                                   nullptr, QFileDialog::DontUseNativeDialog);
+  QString file_name = QFileDialog::getSaveFileName(this, tr("Save Camera Robot Pose"), "", tr("Target File (*.launch);;All Files (*)"), nullptr, QFileDialog::DontUseNativeDialog);
 
   if (file_name.isEmpty())
     return;
@@ -582,8 +592,7 @@ void ControlTabWidget::saveCameraPoseBtnClicked(bool clicked)
   std::stringstream ss;
   ss << "<launch>\n";
   ss << "<node pkg=\"tf2_ros\" type=\"static_transform_publisher\" name=\"camera_link_broadcaster\"\n";
-  ss << "      args=\"" << t[0] << " " << t[1] << " " << t[2] << " " << r[0] << " " << r[1] << " " << r[2] << " "
-     << from_frame << " " << to_frame << "\" />\n";
+  ss << "      args=\"" << t[0] << " " << t[1] << " " << t[2] << " " << r[0] << " " << r[1] << " " << r[2] << " " << from_frame << " " << to_frame << "\" />\n";
   ss << "</launch>";
   out << ss.str().c_str();
 }
@@ -624,9 +633,7 @@ void ControlTabWidget::saveJointStateBtnClicked(bool clicked)
     return;
   }
 
-  QString file_name =
-      QFileDialog::getSaveFileName(this, tr("Save Joint States"), "", tr("Target File (*.yaml);;All Files (*)"),
-                                   nullptr, QFileDialog::DontUseNativeDialog);
+  QString file_name = QFileDialog::getSaveFileName(this, tr("Save Joint States"), "", tr("Target File (*.yaml);;All Files (*)"), nullptr, QFileDialog::DontUseNativeDialog);
 
   if (file_name.isEmpty())
     return;
@@ -671,13 +678,13 @@ void ControlTabWidget::saveJointStateBtnClicked(bool clicked)
 
 void ControlTabWidget::saveSamplesBtnClicked(bool clicked)
 {
-  if (effector_wrt_world_.size() != object_wrt_sensor_.size()) {
+  if (effector_wrt_world_.size() != object_wrt_sensor_.size())
+  {
     ROS_ERROR_STREAM_NAMED(LOGNAME, "Different number of poses");
     return;
   }
 
-  QString file_name =
-      QFileDialog::getSaveFileName(this, tr("Save Samples"), "", tr("Target File (*.yaml);;All Files (*)"));
+  QString file_name = QFileDialog::getSaveFileName(this, tr("Save Samples"), "", tr("Target File (*.yaml);;All Files (*)"));
 
   if (file_name.isEmpty())
     return;
@@ -694,20 +701,25 @@ void ControlTabWidget::saveSamplesBtnClicked(bool clicked)
 
   YAML::Emitter emitter;
   emitter << YAML::BeginSeq;
-  for (size_t i=0; i<effector_wrt_world_.size(); i++) {
+  for (size_t i = 0; i < effector_wrt_world_.size(); i++)
+  {
     emitter << YAML::Value << YAML::BeginMap;
     emitter << YAML::Key << "effector_wrt_world";
     emitter << YAML::Value << YAML::BeginSeq;
-    for (size_t y=0; y<4; y++) {
-      for (size_t x=0; x<4; x++) {
+    for (size_t y = 0; y < 4; y++)
+    {
+      for (size_t x = 0; x < 4; x++)
+      {
         emitter << YAML::Value << effector_wrt_world_[i](y, x);
       }
     }
     emitter << YAML::EndSeq;
     emitter << YAML::Key << "object_wrt_sensor";
     emitter << YAML::Value << YAML::BeginSeq;
-    for (size_t y=0; y<4; y++) {
-      for (size_t x=0; x<4; x++) {
+    for (size_t y = 0; y < 4; y++)
+    {
+      for (size_t x = 0; x < 4; x++)
+      {
         emitter << YAML::Value << object_wrt_sensor_[i](y, x);
       }
     }
@@ -722,9 +734,7 @@ void ControlTabWidget::saveSamplesBtnClicked(bool clicked)
 
 void ControlTabWidget::loadJointStateBtnClicked(bool clicked)
 {
-  QString file_name =
-      QFileDialog::getOpenFileName(this, tr("Load Joint States"), "", tr("Target File (*.yaml);;All Files (*)"),
-                                   nullptr, QFileDialog::DontUseNativeDialog);
+  QString file_name = QFileDialog::getOpenFileName(this, tr("Load Joint States"), "", tr("Target File (*.yaml);;All Files (*)"), nullptr, QFileDialog::DontUseNativeDialog);
 
   if (file_name.isEmpty() || !file_name.endsWith(".yaml"))
     return;
@@ -837,8 +847,7 @@ void ControlTabWidget::computePlan()
   // Get current joint state as start state
   robot_state::RobotStatePtr start_state = move_group_->getCurrentState();
   planning_scene_monitor_->waitForCurrentRobotState(ros::Time::now(), 0.1);
-  const planning_scene_monitor::LockedPlanningSceneRO& ps =
-      planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_);
+  const planning_scene_monitor::LockedPlanningSceneRO& ps = planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_);
   if (ps)
     start_state.reset(new robot_state::RobotState(ps->getCurrentState()));
 
@@ -850,9 +859,7 @@ void ControlTabWidget::computePlan()
     move_group_->setMaxVelocityScalingFactor(0.5);
     move_group_->setMaxAccelerationScalingFactor(0.5);
     current_plan_.reset(new moveit::planning_interface::MoveGroupInterface::Plan());
-    planning_res_ = (move_group_->plan(*current_plan_) == moveit::planning_interface::MoveItErrorCode::SUCCESS) ?
-                        ControlTabWidget::SUCCESS :
-                        ControlTabWidget::FAILURE_PLAN_FAILED;
+    planning_res_ = (move_group_->plan(*current_plan_) == moveit::planning_interface::MoveItErrorCode::SUCCESS) ? ControlTabWidget::SUCCESS : ControlTabWidget::FAILURE_PLAN_FAILED;
 
     if (planning_res_ == ControlTabWidget::SUCCESS)
       ROS_DEBUG_STREAM_NAMED(LOGNAME, "Planning succeed.");
@@ -875,9 +882,7 @@ void ControlTabWidget::autoExecuteBtnClicked(bool clicked)
 void ControlTabWidget::computeExecution()
 {
   if (move_group_ && current_plan_)
-    planning_res_ = (move_group_->execute(*current_plan_) == moveit::planning_interface::MoveItErrorCode::SUCCESS) ?
-                        ControlTabWidget::SUCCESS :
-                        ControlTabWidget::FAILURE_PLAN_FAILED;
+    planning_res_ = (move_group_->execute(*current_plan_) == moveit::planning_interface::MoveItErrorCode::SUCCESS) ? ControlTabWidget::SUCCESS : ControlTabWidget::FAILURE_PLAN_FAILED;
 
   if (planning_res_ == ControlTabWidget::SUCCESS)
   {
@@ -893,12 +898,10 @@ void ControlTabWidget::planFinished()
   switch (planning_res_)
   {
     case ControlTabWidget::FAILURE_NO_JOINT_STATE:
-      QMessageBox::warning(this, tr("Error"),
-                           tr("Could not compute plan. No more prerecorded joint states to execute."));
+      QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. No more prerecorded joint states to execute."));
       break;
     case ControlTabWidget::FAILURE_INVALID_JOINT_STATE:
-      QMessageBox::warning(this, tr("Error"),
-                           tr("Could not compute plan. Invalid joint states (names wrong or missing)."));
+      QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. Invalid joint states (names wrong or missing)."));
       break;
     case ControlTabWidget::FAILURE_NO_PSM:
       QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. No planning scene monitor."));
@@ -907,9 +910,7 @@ void ControlTabWidget::planFinished()
       QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. Missing move_group."));
       break;
     case ControlTabWidget::FAILURE_WRONG_MOVE_GROUP:
-      QMessageBox::warning(
-          this, tr("Error"),
-          tr("Could not compute plan. Joint names for recorded state do not match names from current planning group."));
+      QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. Joint names for recorded state do not match names from current planning group."));
       break;
     case ControlTabWidget::FAILURE_PLAN_FAILED:
       QMessageBox::warning(this, tr("Error"), tr("Could not compute plan. Planning failed."));

@@ -129,8 +129,7 @@ public:
 
   void setTFTool(rviz_visual_tools::TFVisualToolsPtr& tf_pub);
 
-  void addPoseSampleToTreeView(const geometry_msgs::TransformStamped& camera_to_object_tf,
-                               const geometry_msgs::TransformStamped& base_to_eef_tf, int id);
+  void addPoseSampleToTreeView(const geometry_msgs::TransformStamped& camera_to_object_tf, const geometry_msgs::TransformStamped& base_to_eef_tf, int id);
 
   bool loadSolverPlugin(std::vector<std::string>& plugins);
 
@@ -165,6 +164,8 @@ public Q_SLOTS:
 private Q_SLOTS:
 
   void takeSampleBtnClicked(bool clicked);
+
+  void dropSampleBtnClicked(bool clicked);
 
   void clearSamplesBtnClicked(bool clicked);
 
@@ -206,6 +207,7 @@ private:
 
   // Manual calibration
   QPushButton* take_sample_btn_;
+  QPushButton* drop_sample_btn_;
   QPushButton* reset_sample_btn_;
 
   // Auto calibration
