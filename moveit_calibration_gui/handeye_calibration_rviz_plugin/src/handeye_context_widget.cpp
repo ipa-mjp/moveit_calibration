@@ -83,8 +83,7 @@ bool TFFrameNameComboBox::hasFrame(const std::string& frame_name)
   return it != names.end();
 }
 
-SliderWidget::SliderWidget(QWidget* parent, std::string name, double min, double max)
-  : QWidget(parent), min_position_(min), max_position_(max)
+SliderWidget::SliderWidget(QWidget* parent, std::string name, double min, double max) : QWidget(parent), min_position_(min), max_position_(max)
 {
   QHBoxLayout* row = new QHBoxLayout(this);
   row->setContentsMargins(0, 10, 0, 10);
@@ -181,6 +180,9 @@ ContextTabWidget::ContextTabWidget(QWidget* parent) : QWidget(parent), tf_listen
   layout_left->addWidget(frame_group);
   QFormLayout* frame_layout = new QFormLayout();
   frame_group->setLayout(frame_layout);
+
+  frames_.insert(std::make_pair("sensor_base", new TFFrameNameComboBox(CAMERA_FRAME)));
+  frame_layout->addRow("Sensor base frame:", frames_["sensor_base"]);
 
   frames_.insert(std::make_pair("sensor", new TFFrameNameComboBox(CAMERA_FRAME)));
   frame_layout->addRow("Sensor frame:", frames_["sensor"]);
@@ -361,8 +363,8 @@ void ContextTabWidget::updateAllMarkers()
       if (!to_frame.isEmpty())
       {
         // // Get camera pose guess
-        setCameraPose(guess_pose_["Tx"]->getValue(), guess_pose_["Ty"]->getValue(), guess_pose_["Tz"]->getValue(),
-                      guess_pose_["Rx"]->getValue(), guess_pose_["Ry"]->getValue(), guess_pose_["Rz"]->getValue());
+        setCameraPose(guess_pose_["Tx"]->getValue(), guess_pose_["Ty"]->getValue(), guess_pose_["Tz"]->getValue(), guess_pose_["Rx"]->getValue(), guess_pose_["Ry"]->getValue(),
+                      guess_pose_["Rz"]->getValue());
 
         // Publish new transform from robot base or end-effector to sensor frame
         tf_tools_->publishTransform(camera_pose_, from_frame.toStdString(), to_frame.toStdString());
@@ -395,8 +397,7 @@ void ContextTabWidget::updateFOVPose()
       // Get FOV pose W.R.T sensor frame
       tf_msg = tf_buffer_.lookupTransform(sensor_frame.toStdString(), optical_frame_, ros::Time(0));
       fov_pose_ = tf2::transformToEigen(tf_msg);
-      ROS_DEBUG_STREAM_NAMED(LOGNAME, "FOV pose from '" << sensor_frame.toStdString() << "' to '" << optical_frame_
-                                                        << "' is:"
+      ROS_DEBUG_STREAM_NAMED(LOGNAME, "FOV pose from '" << sensor_frame.toStdString() << "' to '" << optical_frame_ << "' is:"
                                                         << "\nTranslation:\n"
                                                         << fov_pose_.translation() << "\nRotation:\n"
                                                         << fov_pose_.rotation());
@@ -448,16 +449,12 @@ shape_msgs::Mesh ContextTabWidget::getCameraFOVMesh(const sensor_msgs::CameraInf
   return mesh;
 }
 
-visualization_msgs::Marker ContextTabWidget::getCameraFOVMarker(const Eigen::Isometry3d& pose,
-                                                                const shape_msgs::Mesh& mesh, rvt::colors color,
-                                                                double alpha, std::string frame_id)
+visualization_msgs::Marker ContextTabWidget::getCameraFOVMarker(const Eigen::Isometry3d& pose, const shape_msgs::Mesh& mesh, rvt::colors color, double alpha, std::string frame_id)
 {
   return getCameraFOVMarker(rvt::RvizVisualTools::convertPose(pose), mesh, color, alpha, frame_id);
 }
 
-visualization_msgs::Marker ContextTabWidget::getCameraFOVMarker(const geometry_msgs::Pose& pose,
-                                                                const shape_msgs::Mesh& mesh, rvt::colors color,
-                                                                double alpha, std::string frame_id)
+visualization_msgs::Marker ContextTabWidget::getCameraFOVMarker(const geometry_msgs::Pose& pose, const shape_msgs::Mesh& mesh, rvt::colors color, double alpha, std::string frame_id)
 {
   visualization_msgs::Marker marker;
   marker.header.frame_id = frame_id;
