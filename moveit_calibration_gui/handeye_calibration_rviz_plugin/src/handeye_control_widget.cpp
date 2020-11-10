@@ -104,6 +104,7 @@ ControlTabWidget::ControlTabWidget(QWidget* parent)
   , solver_(nullptr)
   , move_group_(nullptr)
   , camera_robot_pose_(Eigen::Isometry3d::Identity())
+  , sensor_base_wrt_sensor_(Eigen::Isometry3d::Identity())
   , auto_started_(false)
   , planning_res_(ControlTabWidget::SUCCESS)
 // spinner_(0, &callback_queue_)
@@ -356,6 +357,7 @@ bool ControlTabWidget::takeTransformSamples()
   {
     geometry_msgs::TransformStamped camera_to_object_tf;
     geometry_msgs::TransformStamped base_to_eef_tf;
+    geometry_msgs::TransformStamped sensor_to_sensor_base_tf;
 
     // Get the transform of the object w.r.t the camera
     camera_to_object_tf = tf_buffer_->lookupTransform(frame_names_["sensor"], frame_names_["object"], ros::Time(0));
@@ -363,9 +365,13 @@ bool ControlTabWidget::takeTransformSamples()
     // Get the transform of the end-effector w.r.t the robot base
     base_to_eef_tf = tf_buffer_->lookupTransform(frame_names_["base"], frame_names_["eef"], ros::Time(0));
 
+    // Get the transform of the sensor base w.r.t the sensor
+    sensor_to_sensor_base_tf = tf_buffer_->lookupTransform(frame_names_["sensor"], frame_names_["sensor_base"], ros::Time(0));
+
     // save the pose samples
     effector_wrt_world_.push_back(tf2::transformToEigen(base_to_eef_tf));
     object_wrt_sensor_.push_back(tf2::transformToEigen(camera_to_object_tf));
+    sensor_base_wrt_sensor_ = tf2::transformToEigen(sensor_to_sensor_base_tf);
 
     ControlTabWidget::addPoseSampleToTreeView(camera_to_object_tf, base_to_eef_tf, effector_wrt_world_.size());
   }
@@ -563,6 +569,7 @@ void ControlTabWidget::saveCameraPoseBtnClicked(bool clicked)
 {
   std::string& from_frame = frame_names_[from_frame_tag_];
   std::string& to_frame = frame_names_["sensor"];
+  std::string& to_base_frame = frame_names_["sensor_base"];
 
   if (from_frame.empty() || to_frame.empty())
   {
@@ -587,12 +594,21 @@ void ControlTabWidget::saveCameraPoseBtnClicked(bool clicked)
 
   QTextStream out(&file);
 
+  // tranformation sensor base wrt to sensor
+  Eigen::Vector3d st = sensor_base_wrt_sensor_.translation();
+  Eigen::Vector3d sr = sensor_base_wrt_sensor_.rotation().eulerAngles(0, 1, 2);
+
+  // tranformation sensor wrt to end-effector
   Eigen::Vector3d t = camera_robot_pose_.translation();
   Eigen::Vector3d r = camera_robot_pose_.rotation().eulerAngles(0, 1, 2);
+
+  // a transformation should be in the form of yaw, pitch and roll
   std::stringstream ss;
   ss << "<launch>\n";
+  ss << "<node pkg=\"tf2_ros\" type=\"static_transform_publisher\" name=\"camera_color_optical_link_broadcaster\"\n";
+  ss << "      args=\"" << t[0] << " " << t[1] << " " << t[2] << " " << r[2] << " " << r[1] << " " << r[0] << " " << from_frame << " " << to_frame << "\" />\n";
   ss << "<node pkg=\"tf2_ros\" type=\"static_transform_publisher\" name=\"camera_link_broadcaster\"\n";
-  ss << "      args=\"" << t[0] << " " << t[1] << " " << t[2] << " " << r[0] << " " << r[1] << " " << r[2] << " " << from_frame << " " << to_frame << "\" />\n";
+  ss << "      args=\"" << st[0] << " " << st[1] << " " << st[2] << " " << sr[2] << " " << sr[1] << " " << sr[0] << " " << to_frame << " " << to_base_frame << "\" />\n";
   ss << "</launch>";
   out << ss.str().c_str();
 }

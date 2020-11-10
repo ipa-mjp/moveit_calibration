@@ -233,6 +233,7 @@ private:
   std::vector<Eigen::Isometry3d> object_wrt_sensor_;
   std::string from_frame_tag_;
   Eigen::Isometry3d camera_robot_pose_;
+  Eigen::Isometry3d sensor_base_wrt_sensor_;
   std::vector<std::vector<double>> joint_states_;
   std::vector<std::string> joint_names_;
   bool auto_started_;
